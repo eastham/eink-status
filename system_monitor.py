@@ -195,8 +195,8 @@ def calculate_deltas(current_stats, previous_state):
         now = datetime.now()
         age = now - prev_time
 
-        # If state is too old (>48h) or too new (<23h), return None
-        if age > timedelta(hours=48) or age < timedelta(hours=23):
+        # If state is too old (>48h), return None
+        if age > timedelta(hours=48):
             return None, None
 
         prev_stats = previous_state['stats']
@@ -243,18 +243,22 @@ def render_display(epd, font18, font36, use_partial=True, set_base=False):
 
     # Left side - Time, Date, and System Stats
     y_pos = 0
+
     # Clear and draw time (fixed width: 5 chars "HH:MM")
-    draw.rectangle([(0, y_pos), (120, y_pos + 36)], fill=255)
-    draw.text((0, y_pos), current_time, font=font36, fill=0)
+    draw.rectangle([(1, y_pos + 1), (119, y_pos + 36)], fill=255)
+    draw.text((2, y_pos + 1), current_time, font=font36, fill=0)
     y_pos += 38
 
     # Clear and draw date (fixed width)
-    draw.rectangle([(0, y_pos), (120, y_pos + 18)], fill=255)
-    draw.text((0, y_pos), current_date, font=font18, fill=0)
+    draw.rectangle([(1, y_pos), (119, y_pos + 17)], fill=255)
+    draw.text((20, y_pos), current_date, font=font18, fill=0)
     y_pos += 20
+   
+    # Draw box around time and date
+    draw.rectangle([(0, 0), (100, y_pos)], outline=0, width=1)
 
     # Clear and draw load
-    draw.rectangle([(0, y_pos), (120, y_pos + 18)], fill=255)
+    draw.rectangle([(0, y_pos+1), (120, y_pos + 18)], fill=255)
     draw.text((0, y_pos), f"{loads[0]:.1f} {loads[1]:.1f} {loads[2]:.1f}", font=font18, fill=0)
     y_pos += 20
 
