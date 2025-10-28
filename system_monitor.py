@@ -212,8 +212,8 @@ def calculate_deltas(current_stats, previous_state):
 def render_display(epd, font18, font36, use_partial=True, set_base=False):
     """Render the display with current stats"""
     # Get current data
-    current_time = time.strftime('%H:%M')
-    current_date = time.strftime('%b %d')
+    current_time = time.strftime('%-I:%M')  # H:MM format 12-hour (no leading zero on hour)
+    current_date = time.strftime('%a %b %d')  # Day-of-week + date
     loads = get_system_load()
     mem_percent = get_memory_usage()
     cpu_temp = get_cpu_temperature()
@@ -246,16 +246,16 @@ def render_display(epd, font18, font36, use_partial=True, set_base=False):
 
     # Clear and draw time (fixed width: 5 chars "HH:MM")
     draw.rectangle([(1, y_pos + 1), (119, y_pos + 36)], fill=255)
-    draw.text((2, y_pos + 1), current_time, font=font36, fill=0)
+    draw.text((4, y_pos + 1), current_time, font=font36, fill=0)
     y_pos += 38
 
-    # Clear and draw date (fixed width)
+    # Clear and draw date
     draw.rectangle([(1, y_pos), (119, y_pos + 17)], fill=255)
-    draw.text((20, y_pos), current_date, font=font18, fill=0)
-    y_pos += 20
+    draw.text((7, y_pos), current_date, font=font18, fill=0)
    
     # Draw box around time and date
-    draw.rectangle([(0, 0), (100, y_pos)], outline=0, width=1)
+    draw.rectangle([(0, 0), (100, 59)], outline=0, width=1)
+    y_pos += 22
 
     # Clear and draw load
     draw.rectangle([(0, y_pos+1), (120, y_pos + 18)], fill=255)
@@ -277,17 +277,17 @@ def render_display(epd, font18, font36, use_partial=True, set_base=False):
     # Disk usage on right side
     draw.rectangle([(125, y_pos), (250, y_pos + 18)], fill=255)
     if '/' in disk_usage:
-        draw.text((125, y_pos), f"/:{disk_usage['/']:3d}%", font=font18, fill=0)
+        draw.text((125, y_pos), f"/:        {disk_usage['/']:3d}%", font=font18, fill=0)
     y_pos += 20
 
     draw.rectangle([(125, y_pos), (250, y_pos + 18)], fill=255)
     if '/dev/sda1' in disk_usage:
-        draw.text((125, y_pos), f"sda1:{disk_usage['/dev/sda1']:3d}%", font=font18, fill=0)
+        draw.text((125, y_pos), f"sda1: {disk_usage['/dev/sda1']:3d}%", font=font18, fill=0)
     y_pos += 20
 
     draw.rectangle([(125, y_pos), (250, y_pos + 18)], fill=255)
     if '/dev/sdb1' in disk_usage:
-        draw.text((125, y_pos), f"sdb1:{disk_usage['/dev/sdb1']:3d}%", font=font18, fill=0)
+        draw.text((125, y_pos), f"sdb1: {disk_usage['/dev/sdb1']:3d}%", font=font18, fill=0)
     y_pos += 20
 
     # SMART stats
@@ -295,17 +295,17 @@ def render_display(epd, font18, font36, use_partial=True, set_base=False):
         # Clear and draw Load Cycle delta (fixed width)
         draw.rectangle([(125, y_pos), (250, y_pos + 18)], fill=255)
         if load_delta is not None:
-            draw.text((125, y_pos), f"LdCyc:+{load_delta:4d}", font=font18, fill=0)
+            draw.text((125, y_pos), f"LdCyc: {load_delta}", font=font18, fill=0)
         else:
-            draw.text((125, y_pos), "LdCyc:  --", font=font18, fill=0)
+            draw.text((125, y_pos), "LdCyc: --", font=font18, fill=0)
         y_pos += 20
 
         # Clear and draw Start/Stop delta (fixed width)
         draw.rectangle([(125, y_pos), (250, y_pos + 18)], fill=255)
         if start_delta is not None:
-            draw.text((125, y_pos), f"StStp:+{start_delta:4d}", font=font18, fill=0)
+            draw.text((125, y_pos), f"StStp:  {start_delta}", font=font18, fill=0)
         else:
-            draw.text((125, y_pos), "StStp:  --", font=font18, fill=0)
+            draw.text((125, y_pos), "StStp: --", font=font18, fill=0)
         y_pos += 20
 
         # Clear and draw health stats (all on one line)
