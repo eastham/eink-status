@@ -14,7 +14,8 @@ import re
 from datetime import datetime, timedelta
 
 # Setup paths
-epd_base = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'e-Paper/RaspberryPi_JetsonNano/python')
+epd_base = os.path.join(os.path.dirname(os.path.realpath(__file__)), 
+                        'e-Paper/RaspberryPi_JetsonNano/python')
 picdir = os.path.join(epd_base, 'pic')
 libdir = os.path.join(epd_base, 'lib')
 if os.path.exists(libdir):
@@ -27,10 +28,10 @@ from PIL import Image, ImageDraw, ImageFont
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# State file for tracking SMART deltas
-STATE_FILE = os.path.expanduser('~/smart_state.json')
 DEVICE = '/dev/sda'
 
+# In-memory rolling 24-hour window for SMART stats (hourly buckets)
+smart_stats_history = {}
 
 def get_system_load():
     """Read system load averages from /proc/loadavg"""
@@ -160,49 +161,37 @@ def get_smart_stats(device=DEVICE):
         return None
 
 
-def load_state():
-    """Load previous SMART state from file"""
-    try:
-        if os.path.exists(STATE_FILE):
-            with open(STATE_FILE, 'r') as f:
-                return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading state: {e}")
-    return None
+def update_smart_history(stats, hour):
+    """Add current SMART stats to the hourly bucket (0-23)"""
+    if stats:
+        smart_stats_history[hour] = stats
 
 
-def save_state(stats):
-    """Save current SMART state to file with timestamp"""
-    try:
-        state = {
-            'timestamp': datetime.now().isoformat(),
-            'stats': stats
-        }
-        with open(STATE_FILE, 'w') as f:
-            json.dump(state, f)
-    except Exception as e:
-        logger.error(f"Error saving state: {e}")
-
-
-def calculate_deltas(current_stats, previous_state):
-    """Calculate 24h deltas for Load_Cycle_Count and Start_Stop_Count"""
-    if not previous_state or not current_stats:
+def calculate_deltas(current_stats, current_hour):
+    """Calculate delta using 24hr old data, or oldest available if not present"""
+    if not current_stats or not smart_stats_history:
         return None, None
 
-    # Check if previous state is within 24-48 hours
     try:
-        prev_time = datetime.fromisoformat(previous_state['timestamp'])
-        now = datetime.now()
-        age = now - prev_time
+        # Prefer data from current hour (which has 24hr old data before we overwrite it)
+        if current_hour in smart_stats_history:
+            prev_stats = smart_stats_history[current_hour]
+        else:
+            # Find oldest hour by checking backwards from current hour
+            oldest_hour = None
+            max_hours_back = 24
+            for i in range(1, max_hours_back):
+                check_hour = (current_hour - i) % 24
+                if check_hour in smart_stats_history:
+                    oldest_hour = check_hour
 
-        # If state is too old (>48h), return None
-        if age > timedelta(hours=48):
-            return None, None
+            if oldest_hour is None:
+                return None, None
 
-        prev_stats = previous_state['stats']
+            prev_stats = smart_stats_history[oldest_hour]
+
         load_delta = current_stats.get('Load_Cycle_Count', 0) - prev_stats.get('Load_Cycle_Count', 0)
         start_delta = current_stats.get('Start_Stop_Count', 0) - prev_stats.get('Start_Stop_Count', 0)
-
         return load_delta, start_delta
     except Exception as e:
         logger.error(f"Error calculating deltas: {e}")
@@ -221,21 +210,13 @@ def render_display(epd, font18, font36, use_partial=True, set_base=False):
     disk_usage = get_disk_usage()
     smart_stats = get_smart_stats()
 
-    # Load previous state and calculate deltas
-    prev_state = load_state()
-    load_delta, start_delta = calculate_deltas(smart_stats, prev_state)
+    # Calculate deltas and update history
+    current_hour = datetime.now().hour
+    load_delta, start_delta = calculate_deltas(smart_stats, current_hour)
 
-    # Save current state for next time
+    # Update history with current stats (overwrites data from 24 hours ago)
     if smart_stats:
-        # Check if we should update the saved state (once per day)
-        should_save = True
-        if prev_state:
-            prev_time = datetime.fromisoformat(prev_state['timestamp'])
-            if datetime.now() - prev_time < timedelta(hours=23):
-                should_save = False
-
-        if should_save:
-            save_state(smart_stats)
+        update_smart_history(smart_stats, current_hour)
 
     # Create image
     image = Image.new('1', (epd.height, epd.width), 255)
