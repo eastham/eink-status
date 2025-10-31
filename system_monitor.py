@@ -25,7 +25,7 @@ import logging
 from waveshare_epd import epd2in13_V4, epdconfig
 from PIL import Image, ImageDraw, ImageFont
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 DEVICE = '/dev/sda'
@@ -141,8 +141,10 @@ def get_smart_stats(device=DEVICE):
             line = line.strip()
             if 'Load_Cycle_Count' in line:
                 stats['Load_Cycle_Count'] = int(line.split()[9])
+                logger.debug(f"Load_Cycle_Count: {stats['Load_Cycle_Count']}")
             elif 'Start_Stop_Count' in line:
                 stats['Start_Stop_Count'] = int(line.split()[9])
+                logger.debug(f"Start_Stop_Count: {stats['Start_Stop_Count']}")
             elif 'Reallocated_Sector_Ct' in line:
                 stats['Reallocated_Sector_Ct'] = int(line.split()[9])
             elif 'Current_Pending_Sector' in line:
@@ -173,25 +175,26 @@ def calculate_deltas(current_stats, current_hour):
         return None, None
 
     try:
-        # Prefer data from current hour (which has 24hr old data before we overwrite it)
-        if current_hour in smart_stats_history:
-            prev_stats = smart_stats_history[current_hour]
-        else:
-            # Find oldest hour by checking backwards from current hour
-            oldest_hour = None
-            max_hours_back = 24
-            for i in range(1, max_hours_back):
-                check_hour = (current_hour - i) % 24
-                if check_hour in smart_stats_history:
-                    oldest_hour = check_hour
+        # Find oldest hour by checking backwards from current hour (skip current hour)
+        oldest_hour = None
+        max_hours_back = 24
+        for i in range(1, max_hours_back + 1):
+            check_hour = (current_hour - i) % 24
+            if check_hour in smart_stats_history:
+                oldest_hour = check_hour
+                # Don't break - keep searching to find the truly oldest data
 
-            if oldest_hour is None:
-                return None, None
+        if oldest_hour is None:
+            return None, None
 
-            prev_stats = smart_stats_history[oldest_hour]
+        prev_stats = smart_stats_history[oldest_hour]
 
         load_delta = current_stats.get('Load_Cycle_Count', 0) - prev_stats.get('Load_Cycle_Count', 0)
         start_delta = current_stats.get('Start_Stop_Count', 0) - prev_stats.get('Start_Stop_Count', 0)
+
+        logger.debug(f"Delta calculation: current_hour={current_hour}, oldest_hour={oldest_hour}, "
+                     f"load_delta={load_delta}, start_delta={start_delta}")
+
         return load_delta, start_delta
     except Exception as e:
         logger.error(f"Error calculating deltas: {e}")
